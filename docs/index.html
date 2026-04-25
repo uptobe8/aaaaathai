@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Consent App (GitHub Pages)</title>
+  <style>
+    body{font-family:Arial,sans-serif;max-width:900px;margin:20px auto;padding:0 16px}
+    .tabs a{margin-right:10px}
+    .card{border:1px solid #ddd;border-radius:10px;padding:14px;margin-top:12px}
+    input,textarea,button{width:100%;padding:10px;border:1px solid #bbb;border-radius:8px;margin:6px 0 12px}
+    button{background:#1f6feb;color:#fff;border:none;font-weight:700}
+    table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:8px;font-size:12px}
+    .hidden{display:none}
+  </style>
+</head>
+<body>
+  <h1>Consent App (GitHub Pages)</h1>
+  <p><strong>Empresa:</strong> <span id="companyName"></span></p>
+  <p class="tabs">
+    <a href="#alta" onclick="show('alta')">Alta</a>
+    <a href="#baja" onclick="show('baja')">Baja</a>
+    <a href="#panel" onclick="show('panel')">Panel</a>
+  </p>
+
+  <section id="alta" class="card">
+    <h2>Consentimiento</h2>
+    <label>Nombre</label><input id="a_name">
+    <label>Email</label><input id="a_email" type="email">
+    <label>Teléfono</label><input id="a_phone">
+    <label><input id="a_legal" type="checkbox" style="width:auto"> Acepto textos legales (obligatorio)</label><br>
+    <label><input id="a_marketing" type="checkbox" style="width:auto"> Acepto comunicaciones comerciales (opcional)</label>
+    <button onclick="alta()">ACEPTAR Y REGISTRAR</button>
+    <p id="a_msg"></p>
+  </section>
+
+  <section id="baja" class="card hidden">
+    <h2>Revocar / Baja</h2>
+    <label>Email</label><input id="b_email" type="email">
+    <label>Teléfono</label><input id="b_phone">
+    <label>Motivo</label><textarea id="b_reason"></textarea>
+    <button onclick="baja()">REGISTRAR BAJA</button>
+    <p id="b_msg"></p>
+  </section>
+
+  <section id="panel" class="card hidden">
+    <h2>Panel local (este navegador)</h2>
+    <button onclick="exportCSV()">Exportar CSV</button>
+    <table>
+      <thead><tr><th>ID</th><th>Evento</th><th>Fecha UTC</th><th>Nombre</th><th>Email</th><th>Teléfono</th><th>Mkt</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </section>
+
+<script>
+const KEY='consent_records_v1';
+const company = new URLSearchParams(location.search).get('empresa') || 'Mi Empresa';
+document.getElementById('companyName').textContent = company;
+
+function getRows(){ return JSON.parse(localStorage.getItem(KEY)||'[]'); }
+function saveRows(rows){ localStorage.setItem(KEY, JSON.stringify(rows)); }
+function now(){ return new Date().toISOString(); }
+
+function alta(){
+  const name = document.getElementById('a_name').value.trim();
+  const email = document.getElementById('a_email').value.trim();
+  const phone = document.getElementById('a_phone').value.trim();
+  const legal = document.getElementById('a_legal').checked;
+  const marketing = document.getElementById('a_marketing').checked;
+  if(!name || !email || !phone || !legal){
+    document.getElementById('a_msg').textContent='Faltan datos o aceptación legal.'; return;
+  }
+  const rows = getRows();
+  rows.unshift({id:Date.now(), event:'ALTA', created_at:now(), name,email,phone, legal_ok:1, marketing_ok:marketing?1:0, reason:''});
+  saveRows(rows); renderRows();
+  document.getElementById('a_msg').textContent='Consentimiento registrado.';
+}
+
+function baja(){
+  const email = document.getElementById('b_email').value.trim();
+  const phone = document.getElementById('b_phone').value.trim();
+  const reason = document.getElementById('b_reason').value.trim();
+  if(!email && !phone){ document.getElementById('b_msg').textContent='Indica email o teléfono.'; return; }
+  const rows = getRows();
+  rows.unshift({id:Date.now(), event:'BAJA', created_at:now(), name:'',email,phone, legal_ok:0, marketing_ok:0, reason});
+  saveRows(rows); renderRows();
+  document.getElementById('b_msg').textContent='Baja registrada.';
+}
+
+function renderRows(){
+  const tbody = document.getElementById('rows');
+  tbody.innerHTML='';
+  getRows().forEach(r=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${r.id}</td><td>${r.event}</td><td>${r.created_at}</td><td>${r.name||''}</td><td>${r.email||''}</td><td>${r.phone||''}</td><td>${r.marketing_ok? 'Sí':'No'}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function exportCSV(){
+  const rows = getRows();
+  const head='evento,fecha_utc,nombre,email,telefono,legal_ok,marketing_ok,motivo_baja\n';
+  const body=rows.map(r=>[r.event,r.created_at,r.name||'',r.email||'',r.phone||'',r.legal_ok,r.marketing_ok,(r.reason||'').replaceAll(',',' ')].join(',')).join('\n');
+  const blob = new Blob([head+body],{type:'text/csv'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='consentimientos.csv'; a.click();
+}
+
+function show(id){ ['alta','baja','panel'].forEach(x=>document.getElementById(x).classList.toggle('hidden',x!==id)); if(id==='panel') renderRows(); }
+renderRows();
+</script>
+</body>
+</html>
